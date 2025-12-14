@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+requests
+openai>=1.37.0

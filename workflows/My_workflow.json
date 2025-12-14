@@ -1,0 +1,566 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true
+        }
+      },
+      "id": "b1b0951d-3cec-434f-add2-eed8dcd58c03",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2060,
+        1160
+      ],
+      "webhookId": "ac963f91-4c01-4956-9300-8a53c0c29051",
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "3e19af30-931c-4ff0-aebe-a08d6b27a0b9",
+              "leftValue": "={{ $json[\"message\"][\"document\"] || $json[\"message\"][\"video\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "204f02d9-9689-4d85-9e19-527caff8cf1f",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json[\"message\"][\"text\"] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "f2774ec4-f945-4428-913a-368a19fa58c9",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2700,
+        1240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/data/temp/input.mp4",
+        "options": {}
+      },
+      "id": "dc815961-88ad-4d74-b239-6eb59a8235e7",
+      "name": "Read/Write Files from Disk",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2940,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "command": "ffmpeg -y -i /data/temp/input.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 /data/temp/audio.wav"
+      },
+      "id": "9e8cd224-d9c7-4cd2-8a53-bad80e646499",
+      "name": "Execute Command",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3160,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "command": "whisper /data/temp/audio.wav --model small --language en --output_format srt --output_dir /data/temp --verbose False && mv /data/temp/audio.srt /data/temp/subs_en.srt"
+      },
+      "id": "64c5ccca-79f9-4f36-b7b2-7f4dfba6f2e7",
+      "name": "Execute Command1",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3380,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/temp/subs_en.srt",
+        "options": {}
+      },
+      "id": "b95984ef-0b2c-46c8-8f3a-0d81ff2e0668",
+      "name": "Read/Write Files from Disk1",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3580,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python3 - <<'PY'\nimport requests\nfrom pathlib import Path\nsrt = Path('/data/temp/subs_en.srt').read_bytes()\nresp = requests.post('http://video-translation:8000/translate', data=srt, timeout=180)\nresp.raise_for_status()\nPath('/data/temp/subs_ru.srt').write_bytes(resp.content)\nprint('translated bytes', len(resp.content))\nPY"
+      },
+      "id": "d8ce78af-d6f2-4cd4-9315-643a473910d1",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3800,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "command": "if [ ! -s /data/temp/subs_ru.srt ] || [ $(stat -c%s /data/temp/subs_ru.srt) -lt 10 ]; then echo \"subs_ru.srt missing/too small, using EN subs\"; cp /data/temp/subs_en.srt /data/temp/subs_ru.srt; fi; ffmpeg -y -i /data/temp/input.mp4 -vf \"subtitles=/data/temp/subs_ru.srt:force_style='Fontsize=24,PrimaryColour=&HFFFFFF&'\" -c:v libx264 -preset veryfast -crf 28 -c:a aac -b:a 128k -movflags +faststart /data/temp/output_ru.mp4"
+      },
+      "id": "b6350e2a-2b9f-4c7f-b6c2-5da9d17cc373",
+      "name": "Execute Command2",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3160,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/temp/output_ru.mp4",
+        "options": {}
+      },
+      "id": "7d7bc29c-7c82-4e6f-8b40-dba6b1bfa5b1",
+      "name": "Read/Write Files from Disk3",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3380,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "id": "747cf3c3-ce99-44c1-a270-8ef17e66d21b",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        3600,
+        1500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "rm -f /data/temp/input.mp4 /data/temp/audio.wav /data/temp/subs_en.srt /data/temp/subs_ru.srt /data/temp/output_ru.mp4"
+      },
+      "id": "42415a3f-1f47-437b-ac4a-b6f76171fe53",
+      "name": "Execute Command3",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3780,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Принял сообщение, начинаю обработку",
+        "additionalFields": {}
+      },
+      "id": "386fc3ce-527b-48e8-a42f-307fca8259f6",
+      "name": "Status: start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        2320,
+        940
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "29dcdaa3-e1ce-4b02-8cf3-6f13cf985234",
+      "name": "Set chat id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Видео получено/скачано, извлекаю аудио",
+        "additionalFields": {}
+      },
+      "id": "f9b565e1-9eee-411d-9eb8-63cc16b46233",
+      "name": "Status: saved input",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        2980,
+        940
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Аудио извлечено, запускаю распознавание",
+        "additionalFields": {}
+      },
+      "id": "91d6b974-a2f4-4619-85d7-18f42c046a98",
+      "name": "Status: audio ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        3200,
+        940
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Английские субтитры готовы, отправляю на перевод",
+        "additionalFields": {}
+      },
+      "id": "c3e8d4ba-9531-41c7-aa4f-1ef17d28f321",
+      "name": "Status: subs en ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        3420,
+        940
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Перевод на русский готов, вжигаю в видео",
+        "additionalFields": {}
+      },
+      "id": "07c1a04e-df8b-4ae2-92f1-4a65ea2f1e1c",
+      "name": "Status: ru subs ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        3840,
+        940
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"] }}",
+        "text": "Готовое видео сформировано, отправляю в чат",
+        "additionalFields": {}
+      },
+      "id": "1f637f74-9188-40c3-af91-e9504fcd6888",
+      "name": "Status: sending",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        3380,
+        1680
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json[\"message\"][\"document\"] ? $json[\"message\"][\"document\"][\"file_id\"] : $json[\"message\"][\"video\"][\"file_id\"] }}"
+      },
+      "id": "e3c71021-cb5a-477d-88b2-1440dc7bec2d",
+      "name": "Telegram Download File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [
+        2720,
+        1020
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "HKr1Ad35HAB8dvt4",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set chat id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Telegram Download File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status: saved input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Execute Command1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status: audio ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command1": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status: subs en ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Status: ru subs ready",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute Command2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command2": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk3": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status: sending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "Execute Command3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Download File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set chat id": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status: start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e5a96ad3-0fc7-4033-b963-cb7d2ffb79e6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2a9a4d2f850b352a20ecde0da9c6d096365b29a79c73acec92bc87abfbff4104"
+  },
+  "id": "MfhcmWnNDCcsxXmG",
+  "tags": []
+}

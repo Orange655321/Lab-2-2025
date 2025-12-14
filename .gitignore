@@ -1,0 +1,8 @@
+.env
+.env.*
+data/
+temp/
+files/
+n8n/
+*.sqlite
+*.log
